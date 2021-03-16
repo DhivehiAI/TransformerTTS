@@ -79,15 +79,16 @@ class HiFiGANPredictor(WavPredictor):
         return output
     
     @classmethod
-    def from_folder(cls, folder_path: str) -> 'HiFiGANPredictor':
+    def from_folder(cls, config_path: str, checkpoint_path: str) -> 'HiFiGANPredictor':
         device = get_device()
-        folder_path = Path(folder_path)
-        with open(str(folder_path / 'config.json')) as f:
+
+        with open(config_path) as f:
             data = f.read()
+
         config = json.loads(data)
         h = AttrDict(config)
         model = GeneratorHiFiGAN(h)
-        checkpoint = torch.load(str(folder_path / 'model.pt'), map_location=device)
+        checkpoint = torch.load(checkpoint_path, map_location=device)
         model.load_state_dict(checkpoint['generator'])
         model.eval()
         model = model.to(device)
