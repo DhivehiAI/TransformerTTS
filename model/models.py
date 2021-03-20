@@ -468,7 +468,7 @@ class ForwardTransformer(tf.keras.models.Model):
     def step(self):
         return int(self.optimizer.iterations)
     
-    def call(self, x, target_durations, target_pitch, training, durations_scalar=1., max_durations_mask=None,
+    def call(self, x, target_durations=None, target_pitch=None, training=False, durations_scalar=1., max_durations_mask=None,
              min_durations_mask=None):
         encoder_padding_mask = create_encoder_padding_mask(x)
         x = self.encoder_prenet(x)
@@ -507,7 +507,7 @@ class ForwardTransformer(tf.keras.models.Model):
     
     def encode_text(self, text):
         return self.text_pipeline(text)
-    
+
     def predict(self, inp, encode=True, speed_regulator=1., phoneme_max_duration=None, phoneme_min_duration=None,
                 max_durations_mask=None, min_durations_mask=None, phoneme_durations=None, phoneme_pitch=None):
         if encode:
@@ -527,7 +527,32 @@ class ForwardTransformer(tf.keras.models.Model):
                         min_durations_mask=min_durations_mask)
         out['mel'] = tf.squeeze(out['mel'])
         return out
-    
+
+    @tf.function(input_signature=[
+        tf.TensorSpec((None,), dtype=tf.int32, name='input'),
+        tf.TensorSpec((), dtype=tf.float32, name='speed'),
+    ])
+    def predict_mel(self, inp, speed):
+
+        if len(tf.shape(inp)) < 2:
+            inp = tf.expand_dims(inp, 0)
+        inp = tf.cast(inp, tf.int32)
+
+        max_durations_mask = tf.cast(tf.convert_to_tensor(tf.ones(tf.shape(inp)) * float('inf')), tf.float32)
+        min_durations_mask = tf.cast(tf.convert_to_tensor(tf.zeros(tf.shape(inp))), tf.float32)
+        duration_scalar = tf.cast(1. / speed, tf.float32)
+
+        out = self.call(inp,
+                        target_durations=None,
+                        target_pitch=None,
+                        training=False,
+                        durations_scalar=duration_scalar,
+                        max_durations_mask=max_durations_mask,
+                        min_durations_mask=min_durations_mask)
+        out['mel'] = tf.squeeze(out['mel'])
+        out['mel'] = tf.transpose(out['mel'])
+        return out['mel']
+
     def _make_max_duration_mask(self, encoded_text, phoneme_max_duration):
         np_text = np.array(encoded_text)
         new_mask = np.ones(tf.shape(encoded_text)) * float('inf')
